@@ -53,11 +53,16 @@ const elements = {
   renameFolderModal: document.getElementById('rename-folder-modal'),
   renameFolderInput: document.getElementById('rename-folder-input'),
   cancelRenameBtn: document.getElementById('cancel-rename-btn'),
-  confirmRenameBtn: document.getElementById('confirm-rename-btn')
+  confirmRenameBtn: document.getElementById('confirm-rename-btn'),
+  
+  // 备忘录右键菜单
+  noteContextMenu: document.getElementById('note-context-menu'),
+  deleteNoteMenu: document.getElementById('delete-note-menu')
 };
 
 // 右键菜单相关状态
 let contextFolderId = null;
+let contextNoteId = null;
 
 // ===== 初始化 =====
 async function init() {
@@ -119,6 +124,7 @@ function bindEvents() {
       hideDeleteModal();
       hideRenameFolderModal();
       hideContextMenu();
+      hideNoteContextMenu();
     }
   });
   
@@ -141,7 +147,13 @@ function bindEvents() {
     if (!elements.contextMenu.contains(e.target)) {
       hideContextMenu();
     }
+    if (!elements.noteContextMenu.contains(e.target)) {
+      hideNoteContextMenu();
+    }
   });
+  
+  // 备忘录右键菜单
+  elements.deleteNoteMenu.addEventListener('click', deleteNoteFromMenu);
 }
 
 // ===== 自动清理空白笔记 =====
@@ -340,12 +352,17 @@ function deleteFolderFromMenu() {
   // 删除文件夹
   const index = appData.folders.findIndex(f => f.id === folderId);
   if (index !== -1) {
-    // 将该文件夹下的笔记移到"无文件夹"
-    appData.notes.forEach(note => {
-      if (note.folderId === folderId) {
-        note.folderId = '';
+    // 同时删除该文件夹下的所有备忘录
+    appData.notes = appData.notes.filter(note => note.folderId !== folderId);
+    
+    // 如果当前选中的笔记被删除了，清空编辑器
+    if (currentNoteId) {
+      const noteStillExists = appData.notes.find(n => n.id === currentNoteId);
+      if (!noteStillExists) {
+        currentNoteId = null;
+        showEditorEmpty();
       }
-    });
+    }
     
     appData.folders.splice(index, 1);
     saveData();
@@ -353,12 +370,72 @@ function deleteFolderFromMenu() {
     // 如果当前选中的是被删除的文件夹，切换到全部
     if (currentFolderId === folderId) {
       currentFolderId = 'all';
-      renderNotes();
     }
     
+    renderNotes();
     renderFolders();
     updateCounts();
   }
+}
+
+// ===== 备忘录右键菜单 =====
+function showNoteContextMenu(e, noteId) {
+  e.preventDefault();
+  e.stopPropagation();
+  contextNoteId = noteId;
+  
+  // 先隐藏文件夹菜单
+  hideContextMenu();
+  
+  const menu = elements.noteContextMenu;
+  menu.style.display = 'block';
+  
+  // 计算位置，确保不超出屏幕
+  let x = e.clientX;
+  let y = e.clientY;
+  
+  const menuRect = menu.getBoundingClientRect();
+  const windowWidth = window.innerWidth;
+  const windowHeight = window.innerHeight;
+  
+  if (x + menuRect.width > windowWidth) {
+    x = windowWidth - menuRect.width - 10;
+  }
+  if (y + menuRect.height > windowHeight) {
+    y = windowHeight - menuRect.height - 10;
+  }
+  
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+}
+
+function hideNoteContextMenu() {
+  elements.noteContextMenu.style.display = 'none';
+}
+
+function deleteNoteFromMenu() {
+  const noteId = contextNoteId; // 先保存ID
+  hideNoteContextMenu();
+  
+  if (!noteId) return;
+  
+  const index = appData.notes.findIndex(n => n.id === noteId);
+  if (index !== -1) {
+    appData.notes.splice(index, 1);
+    saveData();
+    
+    // 如果删除的是当前选中的笔记
+    if (currentNoteId === noteId) {
+      currentNoteId = null;
+      showEditorEmpty();
+    }
+    
+    renderNotes();
+    renderFolders();
+    updateCounts();
+  }
+  
+  contextNoteId = null;
 }
 
 // ===== 笔记操作 =====
@@ -446,9 +523,10 @@ function renderNotes() {
     </div>
   `).join('');
   
-  // 绑定点击事件
+  // 绑定点击事件和右键事件
   elements.notesItems.querySelectorAll('.note-item').forEach(item => {
     item.addEventListener('click', () => selectNote(item.dataset.note));
+    item.addEventListener('contextmenu', (e) => showNoteContextMenu(e, item.dataset.note));
   });
 }
 
