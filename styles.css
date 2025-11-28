@@ -293,11 +293,11 @@ body {
 }
 
 .note-item {
-  padding: 14px;
+  padding: 10px 12px;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   border: 1px solid transparent;
 }
 
